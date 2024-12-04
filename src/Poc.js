@@ -9,6 +9,9 @@ const WebRTCConnection = () => {
   const [callerId, setCallerId] = useState(null);
   const [peerId, setPeerId] = useState(null);
   const [availablePeers, setAvailablePeers] = useState([]);
+  const [videoDevices, setVideoDevices] = useState([]);
+  const [currentDeviceId, setCurrentDeviceId] = useState(null);
+
   const socket = useRef();
   const peerRef = useRef();
   const videoRef = useRef();
@@ -67,9 +70,32 @@ const WebRTCConnection = () => {
     };
   }, []);
 
-  const getUserMediaStream = async () => {
+  useEffect(() => {
+    // Enumerate devices and set initial video device
+    navigator.mediaDevices.enumerateDevices().then((devices) => {
+      const videoInputDevices = devices.filter((device) => device.kind === 'videoinput');
+      setVideoDevices(videoInputDevices);
+
+      const backCamera = videoInputDevices.find((device) =>
+        device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('environment')
+      );
+
+      setCurrentDeviceId(backCamera ? backCamera.deviceId : videoInputDevices[0]?.deviceId);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (currentDeviceId) {
+      getUserMediaStream(currentDeviceId).then((localStream) => {
+        setStream(localStream);
+        videoRef.current.srcObject = localStream;
+      });
+    }
+  }, [currentDeviceId]);
+
+  const getUserMediaStream = async (deviceId) => {
     const constraints = {
-      video: true,
+      video: { deviceId: deviceId ? { exact: deviceId } : undefined },
       audio: true,
     };
     return await navigator.mediaDevices.getUserMedia(constraints);
@@ -86,7 +112,7 @@ const WebRTCConnection = () => {
   };
 
   const acceptCall = () => {
-    getUserMediaStream().then((localStream) => {
+    getUserMediaStream(currentDeviceId).then((localStream) => {
       setStream(localStream);
       videoRef.current.srcObject = localStream; // Show local video
 
@@ -132,7 +158,7 @@ const WebRTCConnection = () => {
 
   return (
     <div>
-      <h1>WebRTC Video Call</h1>
+      <h1>WebRTC Video Call with Camera Toggle</h1>
 
       {isReceivingCall ? (
         <div>
@@ -151,11 +177,29 @@ const WebRTCConnection = () => {
 
       <div>
         <h2>Local Video</h2>
-        <video ref={videoRef} autoPlay muted playsInline />
+        <video ref={videoRef} autoPlay muted playsInline style={{ width: '80%', border: '1px solid black' }} />
       </div>
       <div>
         <h2>Remote Video</h2>
-        <video ref={remoteVideoRef} autoPlay playsInline />
+        <video ref={remoteVideoRef} autoPlay playsInline style={{ width: '80%', border: '1px solid black' }} />
+      </div>
+
+      <div style={{ marginTop: '20px' }}>
+        <h2>Toggle Camera</h2>
+        {videoDevices.map((device) => (
+          <button
+            key={device.deviceId}
+            onClick={() => setCurrentDeviceId(device.deviceId)}
+            style={{
+              margin: '5px',
+              padding: '10px',
+              background: currentDeviceId === device.deviceId ? 'green' : 'gray',
+              color: 'white',
+            }}
+          >
+            {device.label || `Camera ${device.deviceId}`}
+          </button>
+        ))}
       </div>
     </div>
   );
