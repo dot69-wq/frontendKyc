@@ -17,6 +17,69 @@ const WebRTCConnection = () => {
   const videoRef = useRef();
   const remoteVideoRef = useRef();
 
+  const getUserMediaStream = async (deviceId) => {
+    const constraints = {
+      video: { deviceId: deviceId ? { exact: deviceId } : undefined },
+      audio: true,
+    };
+    return await navigator.mediaDevices.getUserMedia(constraints);
+  };
+
+  const initiateCall = () => {
+    const targetPeerId = availablePeers.find((id) => id !== peerId); // Find another peer
+    if (targetPeerId) {
+      console.log('Initiating call to:', targetPeerId);
+      socket.current.emit('call-peer', targetPeerId);
+    } else {
+      console.log('No other peers available');
+    }
+  };
+
+  const acceptCall = () => {
+    getUserMediaStream(currentDeviceId).then((localStream) => {
+      setStream(localStream);
+      videoRef.current.srcObject = localStream; // Show local video
+
+      const call = peerRef.current.call(callerId, localStream);
+      setCurrentCall(call);
+
+      call.on('stream', (remoteStream) => {
+        remoteVideoRef.current.srcObject = remoteStream; // Show remote video
+      });
+
+      call.on('close', () => {
+        console.log('Call ended');
+        cleanupStreams();
+      });
+    });
+    setIsReceivingCall(false);
+  };
+
+  const endCall = () => {
+    if (currentCall) {
+      currentCall.close(); // End the call
+    }
+    cleanupStreams();
+  };
+
+  const cleanupStreams = () => {
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+    }
+    setStream(null);
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = null;
+    }
+
+    setCurrentCall(null);
+    setCallerId(null);
+  };
+
   useEffect(() => {
     // Initialize WebSocket connection
     socket.current = io('https://backendkyc.onrender.com');
@@ -92,69 +155,6 @@ const WebRTCConnection = () => {
       });
     }
   }, [currentDeviceId]);
-
-  const getUserMediaStream = async (deviceId) => {
-    const constraints = {
-      video: { deviceId: deviceId ? { exact: deviceId } : undefined },
-      audio: true,
-    };
-    return await navigator.mediaDevices.getUserMedia(constraints);
-  };
-
-  const initiateCall = () => {
-    const targetPeerId = availablePeers.find((id) => id !== peerId); // Find another peer
-    if (targetPeerId) {
-      console.log('Initiating call to:', targetPeerId);
-      socket.current.emit('call-peer', targetPeerId);
-    } else {
-      console.log('No other peers available');
-    }
-  };
-
-  const acceptCall = () => {
-    getUserMediaStream(currentDeviceId).then((localStream) => {
-      setStream(localStream);
-      videoRef.current.srcObject = localStream; // Show local video
-
-      const call = peerRef.current.call(callerId, localStream);
-      setCurrentCall(call);
-
-      call.on('stream', (remoteStream) => {
-        remoteVideoRef.current.srcObject = remoteStream; // Show remote video
-      });
-
-      call.on('close', () => {
-        console.log('Call ended');
-        cleanupStreams();
-      });
-    });
-    setIsReceivingCall(false);
-  };
-
-  const endCall = () => {
-    if (currentCall) {
-      currentCall.close(); // End the call
-    }
-    cleanupStreams();
-  };
-
-  const cleanupStreams = () => {
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-    }
-    setStream(null);
-
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = null;
-    }
-
-    setCurrentCall(null);
-    setCallerId(null);
-  };
 
   return (
     <div>
