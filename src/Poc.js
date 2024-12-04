@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Peer from 'peerjs';
 import { io } from 'socket.io-client';
 
@@ -17,6 +17,7 @@ const WebRTCConnection = () => {
   const videoRef = useRef();
   const remoteVideoRef = useRef();
 
+  // Function to get user media stream
   const getUserMediaStream = async (deviceId) => {
     const constraints = {
       video: { deviceId: deviceId ? { exact: deviceId } : undefined },
@@ -25,6 +26,7 @@ const WebRTCConnection = () => {
     return await navigator.mediaDevices.getUserMedia(constraints);
   };
 
+  // Initiate the call
   const initiateCall = () => {
     const targetPeerId = availablePeers.find((id) => id !== peerId); // Find another peer
     if (targetPeerId) {
@@ -35,6 +37,7 @@ const WebRTCConnection = () => {
     }
   };
 
+  // Accept the incoming call
   const acceptCall = () => {
     getUserMediaStream(currentDeviceId).then((localStream) => {
       setStream(localStream);
@@ -55,6 +58,7 @@ const WebRTCConnection = () => {
     setIsReceivingCall(false);
   };
 
+  // End the call
   const endCall = () => {
     if (currentCall) {
       currentCall.close(); // End the call
@@ -62,7 +66,8 @@ const WebRTCConnection = () => {
     cleanupStreams();
   };
 
-  const cleanupStreams = () => {
+  // Cleanup streams after the call ends
+  const cleanupStreams = useCallback(() => {
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
     }
@@ -78,8 +83,9 @@ const WebRTCConnection = () => {
 
     setCurrentCall(null);
     setCallerId(null);
-  };
+  }, [stream]); // Only depend on `stream` as it's the only thing that changes
 
+  // Effect hook to initialize WebSocket and PeerJS connection
   useEffect(() => {
     // Initialize WebSocket connection
     socket.current = io('https://backendkyc.onrender.com');
@@ -122,7 +128,7 @@ const WebRTCConnection = () => {
 
         call.on('close', () => {
           console.log('Call ended');
-          cleanupStreams();
+          cleanupStreams();  // Cleanup after call ends
         });
       });
     });
@@ -131,10 +137,10 @@ const WebRTCConnection = () => {
       peer.destroy();
       socket.current.disconnect();
     };
-  }, []);
+  }, [cleanupStreams]); // Added cleanupStreams as a dependency here
 
+  // Effect hook to enumerate devices and set the initial video device
   useEffect(() => {
-    // Enumerate devices and set initial video device
     navigator.mediaDevices.enumerateDevices().then((devices) => {
       const videoInputDevices = devices.filter((device) => device.kind === 'videoinput');
       setVideoDevices(videoInputDevices);
@@ -147,6 +153,7 @@ const WebRTCConnection = () => {
     });
   }, []);
 
+  // Effect hook to update the stream based on the selected video device
   useEffect(() => {
     if (currentDeviceId) {
       getUserMediaStream(currentDeviceId).then((localStream) => {
