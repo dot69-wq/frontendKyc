@@ -22,7 +22,18 @@ const WebRTCConnection = () => {
     socket.current = io("https://backendkyc.onrender.com");
 
     // Initialize PeerJS
-    const peer = new Peer();
+    //const peer = new Peer();
+    const peer = new Peer({
+      config: {
+        iceServers: [
+          {
+            url: "stun:stun.manchtech.com:5349",
+            username: "vkyc",
+            credential: "esign@vkyc",
+          },
+        ],
+      },
+    });
     peerRef.current = peer;
 
     peer.on("open", (id) => {
