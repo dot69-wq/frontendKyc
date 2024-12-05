@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Peer from 'peerjs';
 import { io } from 'socket.io-client';
 
@@ -17,75 +17,6 @@ const WebRTCConnection = () => {
   const videoRef = useRef();
   const remoteVideoRef = useRef();
 
-  // Function to get user media stream
-  const getUserMediaStream = async (deviceId) => {
-    const constraints = {
-      video: { deviceId: deviceId ? { exact: deviceId } : undefined },
-      audio: true,
-    };
-    return await navigator.mediaDevices.getUserMedia(constraints);
-  };
-
-  // Initiate the call
-  const initiateCall = () => {
-    const targetPeerId = availablePeers.find((id) => id !== peerId); // Find another peer
-    if (targetPeerId) {
-      console.log('Initiating call to:', targetPeerId);
-      socket.current.emit('call-peer', targetPeerId);
-    } else {
-      console.log('No other peers available');
-    }
-  };
-
-  // Accept the incoming call
-  const acceptCall = () => {
-    getUserMediaStream(currentDeviceId).then((localStream) => {
-      setStream(localStream);
-      videoRef.current.srcObject = localStream; // Show local video
-
-      const call = peerRef.current.call(callerId, localStream);
-      setCurrentCall(call);
-
-      call.on('stream', (remoteStream) => {
-        remoteVideoRef.current.srcObject = remoteStream; // Show remote video
-      });
-
-      call.on('close', () => {
-        console.log('Call ended');
-        cleanupStreams();
-      });
-    });
-    setIsReceivingCall(false);
-  };
-
-  // End the call
-  const endCall = () => {
-    if (currentCall) {
-      currentCall.close(); // End the call
-    }
-    cleanupStreams();
-  };
-
-  // Cleanup streams after the call ends
-  const cleanupStreams = useCallback(() => {
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-    }
-    setStream(null);
-
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = null;
-    }
-
-    setCurrentCall(null);
-    setCallerId(null);
-  }, [stream]); // Only depend on `stream` as it's the only thing that changes
-
-  // Effect hook to initialize WebSocket and PeerJS connection
   useEffect(() => {
     // Initialize WebSocket connection
     socket.current = io('https://backendkyc.onrender.com');
@@ -128,7 +59,7 @@ const WebRTCConnection = () => {
 
         call.on('close', () => {
           console.log('Call ended');
-          cleanupStreams();  // Cleanup after call ends
+          cleanupStreams();
         });
       });
     });
@@ -137,10 +68,11 @@ const WebRTCConnection = () => {
       peer.destroy();
       socket.current.disconnect();
     };
-  }, [cleanupStreams]); // Added cleanupStreams as a dependency here
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Effect hook to enumerate devices and set the initial video device
   useEffect(() => {
+    // Enumerate devices and set initial video device
     navigator.mediaDevices.enumerateDevices().then((devices) => {
       const videoInputDevices = devices.filter((device) => device.kind === 'videoinput');
       setVideoDevices(videoInputDevices);
@@ -153,7 +85,6 @@ const WebRTCConnection = () => {
     });
   }, []);
 
-  // Effect hook to update the stream based on the selected video device
   useEffect(() => {
     if (currentDeviceId) {
       getUserMediaStream(currentDeviceId).then((localStream) => {
@@ -162,6 +93,69 @@ const WebRTCConnection = () => {
       });
     }
   }, [currentDeviceId]);
+
+  const getUserMediaStream = async (deviceId) => {
+    const constraints = {
+      video: { deviceId: deviceId ? { exact: deviceId } : undefined },
+      audio: true,
+    };
+    return await navigator.mediaDevices.getUserMedia(constraints);
+  };
+
+  const initiateCall = () => {
+    const targetPeerId = availablePeers.find((id) => id !== peerId); // Find another peer
+    if (targetPeerId) {
+      console.log('Initiating call to:', targetPeerId);
+      socket.current.emit('call-peer', targetPeerId);
+    } else {
+      console.log('No other peers available');
+    }
+  };
+
+  const acceptCall = () => {
+    getUserMediaStream(currentDeviceId).then((localStream) => {
+      setStream(localStream);
+      videoRef.current.srcObject = localStream; // Show local video
+
+      const call = peerRef.current.call(callerId, localStream);
+      setCurrentCall(call);
+
+      call.on('stream', (remoteStream) => {
+        remoteVideoRef.current.srcObject = remoteStream; // Show remote video
+      });
+
+      call.on('close', () => {
+        console.log('Call ended');
+        cleanupStreams();
+      });
+    });
+    setIsReceivingCall(false);
+  };
+
+  const endCall = () => {
+    if (currentCall) {
+      currentCall.close(); // End the call
+    }
+    cleanupStreams();
+  };
+
+  const cleanupStreams = () => {
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+    }
+    setStream(null);
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = null;
+    }
+
+    setCurrentCall(null);
+    setCallerId(null);
+  };
 
   return (
     <div>
