@@ -109,14 +109,6 @@ const WebRTCConnection = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDeviceId]);
 
-  const getUserMediaStream = async (deviceId) => {
-    const constraints = {
-      video: { deviceId: deviceId ? { exact: deviceId } : undefined },
-      audio: true,
-    };
-    return await navigator.mediaDevices.getUserMedia(constraints);
-  };
-
   const switchCamera = async (deviceId) => {
     if (stream) {
       stream.getTracks().forEach((track) => track.stop()); // Stop the current stream
@@ -124,6 +116,20 @@ const WebRTCConnection = () => {
     const newStream = await getUserMediaStream(deviceId);
     setStream(newStream);
     videoRef.current.srcObject = newStream; // Update video source
+  };
+
+  const getUserMediaStream = async (deviceId) => {
+    const constraints = {
+      video: { deviceId: deviceId ? { exact: deviceId } : undefined },
+      audio: true,
+    };
+
+    try {
+      return await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (err) {
+      console.error("Error accessing camera: ", err);
+      return null; // Handle error
+    }
   };
 
   const initiateCall = () => {

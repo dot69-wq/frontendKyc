@@ -1,5 +1,5 @@
 import React from "react";
-import WebRTCConnection from "./Poc";
+import WebRTCConnection from "./Back";
 
 const App = () => {
   return <WebRTCConnection />;
