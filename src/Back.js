@@ -223,31 +223,38 @@ const WebRTCConnection = () => {
 
   const switchCamera = async () => {
     if (stream) {
-      // Stop the current video tracks only to preserve other tracks (e.g., audio)
+      // Stop all video tracks first, but leave audio intact
       stream.getVideoTracks().forEach((track) => track.stop());
     }
 
-    // Get the new stream with the switched camera (either front or back)
+    // Get the new stream from the desired camera
     const newStream = await getUserMediaStream();
-    setStream(newStream); // Set new stream to state
+    setStream(newStream); // Set the new stream to state
     videoRef.current.srcObject = newStream; // Update the local video element
 
     if (currentCall) {
-      // If there is an ongoing call, replace the video track on the call
+      // Ensure the call is ongoing and we replace the video track
       const videoTrack = newStream.getVideoTracks()[0];
       const sender = currentCall.peerConnection
-        .getSenders()
-        .find((sender) => sender.track.kind === "video");
+        ?.getSenders()
+        ?.find((sender) => sender.track.kind === "video");
+
       if (sender) {
-        // Replace the existing video track with the new one
-        await sender.replaceTrack(videoTrack);
+        // Try replacing the video track in the ongoing peer connection
+        try {
+          await sender.replaceTrack(videoTrack);
+          console.log("Replaced video track successfully");
+        } catch (err) {
+          console.error("Error replacing video track:", err);
+        }
       }
     }
   };
 
+  // This function handles toggling between the front and back camera
   const toggleCamera = () => {
-    setUseBackCamera((prev) => !prev); // Toggle between front and back camera
-    switchCamera(); // Switch camera without ending the call
+    setUseBackCamera((prev) => !prev); // Toggle camera mode
+    switchCamera(); // Call the camera switching logic
   };
 
   return (
