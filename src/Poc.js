@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
-import Peer from 'peerjs';
-import { io } from 'socket.io-client';
+import React, { useEffect, useRef, useState } from "react";
+import Peer from "peerjs";
+import { io } from "socket.io-client";
 
 const WebRTCConnection = () => {
   const [stream, setStream] = useState(null);
@@ -19,46 +19,46 @@ const WebRTCConnection = () => {
 
   useEffect(() => {
     // Initialize WebSocket connection
-    socket.current = io('https://backendkyc.onrender.com');
+    socket.current = io("https://backendkyc.onrender.com");
 
     // Initialize PeerJS
     const peer = new Peer();
     peerRef.current = peer;
 
-    peer.on('open', (id) => {
+    peer.on("open", (id) => {
       setPeerId(id);
-      console.log('Generated Peer ID:', id);
+      console.log("Generated Peer ID:", id);
       // Register peer with signaling server
-      socket.current.emit('register-peer', id);
+      socket.current.emit("register-peer", id);
     });
 
     // Handle updated peers list
-    socket.current.on('peers-list', (peers) => {
-      console.log('Updated peers list:', peers);
+    socket.current.on("peers-list", (peers) => {
+      console.log("Updated peers list:", peers);
       setAvailablePeers(peers);
     });
 
     // Handle incoming call notification
-    socket.current.on('incoming-call', (callerPeerId) => {
-      console.log('Incoming call from:', callerPeerId);
+    socket.current.on("incoming-call", (callerPeerId) => {
+      console.log("Incoming call from:", callerPeerId);
       setIsReceivingCall(true);
       setCallerId(callerPeerId);
     });
 
     // Handle WebRTC call setup
-    peer.on('call', (call) => {
-      getUserMediaStream().then((localStream) => {
+    peer.on("call", (call) => {
+      getUserMediaStream(currentDeviceId).then((localStream) => {
         setStream(localStream);
         videoRef.current.srcObject = localStream; // Show local video
         call.answer(localStream); // Answer the call
         setCurrentCall(call);
 
-        call.on('stream', (remoteStream) => {
+        call.on("stream", (remoteStream) => {
           remoteVideoRef.current.srcObject = remoteStream; // Show remote video
         });
 
-        call.on('close', () => {
-          console.log('Call ended');
+        call.on("close", () => {
+          console.log("Call ended");
           cleanupStreams();
         });
       });
@@ -74,24 +74,28 @@ const WebRTCConnection = () => {
   useEffect(() => {
     // Enumerate devices and set initial video device
     navigator.mediaDevices.enumerateDevices().then((devices) => {
-      const videoInputDevices = devices.filter((device) => device.kind === 'videoinput');
+      const videoInputDevices = devices.filter(
+        (device) => device.kind === "videoinput"
+      );
       setVideoDevices(videoInputDevices);
 
-      const backCamera = videoInputDevices.find((device) =>
-        device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('environment')
+      const backCamera = videoInputDevices.find(
+        (device) =>
+          device.label.toLowerCase().includes("back") ||
+          device.label.toLowerCase().includes("environment")
       );
 
-      setCurrentDeviceId(backCamera ? backCamera.deviceId : videoInputDevices[0]?.deviceId);
+      setCurrentDeviceId(
+        backCamera ? backCamera.deviceId : videoInputDevices[0]?.deviceId
+      );
     });
   }, []);
 
   useEffect(() => {
     if (currentDeviceId) {
-      getUserMediaStream(currentDeviceId).then((localStream) => {
-        setStream(localStream);
-        videoRef.current.srcObject = localStream;
-      });
+      switchCamera(currentDeviceId);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDeviceId]);
 
   const getUserMediaStream = async (deviceId) => {
@@ -102,13 +106,22 @@ const WebRTCConnection = () => {
     return await navigator.mediaDevices.getUserMedia(constraints);
   };
 
+  const switchCamera = async (deviceId) => {
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop()); // Stop the current stream
+    }
+    const newStream = await getUserMediaStream(deviceId);
+    setStream(newStream);
+    videoRef.current.srcObject = newStream; // Update video source
+  };
+
   const initiateCall = () => {
     const targetPeerId = availablePeers.find((id) => id !== peerId); // Find another peer
     if (targetPeerId) {
-      console.log('Initiating call to:', targetPeerId);
-      socket.current.emit('call-peer', targetPeerId);
+      console.log("Initiating call to:", targetPeerId);
+      socket.current.emit("call-peer", targetPeerId);
     } else {
-      console.log('No other peers available');
+      console.log("No other peers available");
     }
   };
 
@@ -120,12 +133,12 @@ const WebRTCConnection = () => {
       const call = peerRef.current.call(callerId, localStream);
       setCurrentCall(call);
 
-      call.on('stream', (remoteStream) => {
+      call.on("stream", (remoteStream) => {
         remoteVideoRef.current.srcObject = remoteStream; // Show remote video
       });
 
-      call.on('close', () => {
-        console.log('Call ended');
+      call.on("close", () => {
+        console.log("Call ended");
         cleanupStreams();
       });
     });
@@ -178,24 +191,36 @@ const WebRTCConnection = () => {
 
       <div>
         <h2>Local Video</h2>
-        <video ref={videoRef} autoPlay muted playsInline style={{ width: '80%', border: '1px solid black' }} />
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          style={{ width: "80%", border: "1px solid black" }}
+        />
       </div>
       <div>
         <h2>Remote Video</h2>
-        <video ref={remoteVideoRef} autoPlay playsInline style={{ width: '80%', border: '1px solid black' }} />
+        <video
+          ref={remoteVideoRef}
+          autoPlay
+          playsInline
+          style={{ width: "80%", border: "1px solid black" }}
+        />
       </div>
 
-      <div style={{ marginTop: '20px' }}>
+      <div style={{ marginTop: "20px" }}>
         <h2>Toggle Camera</h2>
         {videoDevices.map((device) => (
           <button
             key={device.deviceId}
             onClick={() => setCurrentDeviceId(device.deviceId)}
             style={{
-              margin: '5px',
-              padding: '10px',
-              background: currentDeviceId === device.deviceId ? 'green' : 'gray',
-              color: 'white',
+              margin: "5px",
+              padding: "10px",
+              background:
+                currentDeviceId === device.deviceId ? "green" : "gray",
+              color: "white",
             }}
           >
             {device.label || `Camera ${device.deviceId}`}
