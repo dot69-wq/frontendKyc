@@ -84,7 +84,7 @@ const WebRTCConnection = () => {
       const videoInputDevices = devices.filter(
         (device) => device.kind === "videoinput"
       );
-     // setVideoDevices(videoInputDevices);
+      // setVideoDevices(videoInputDevices);
 
       const backCamera = videoInputDevices.find(
         (device) =>
@@ -139,24 +139,24 @@ const WebRTCConnection = () => {
     }
   };
 
-  const switchCamera = async () => {
-    if (stream) {
-      // Stop current video tracks only
-      stream.getVideoTracks().forEach((track) => track.stop());
-    }
-  
-    const newStream = await getUserMediaStream();  // Get new stream with the switched camera
-    setStream(newStream);
-    videoRef.current.srcObject = newStream;  // Update the local video stream
-    
-    // If there's an ongoing call, replace the old stream with the new one
-    if (currentCall) {
-      const sender = currentCall.peerConnection.getSenders().find((sender) => sender.track.kind === "video");
-      if (sender) {
-        sender.replaceTrack(newStream.getVideoTracks()[0]);
-      }
-    }
-  };
+  // const switchCamera = async () => {
+  //   if (stream) {
+  //     // Stop current video tracks only
+  //     stream.getVideoTracks().forEach((track) => track.stop());
+  //   }
+
+  //   const newStream = await getUserMediaStream();  // Get new stream with the switched camera
+  //   setStream(newStream);
+  //   videoRef.current.srcObject = newStream;  // Update the local video stream
+
+  //   // If there's an ongoing call, replace the old stream with the new one
+  //   if (currentCall) {
+  //     const sender = currentCall.peerConnection.getSenders().find((sender) => sender.track.kind === "video");
+  //     if (sender) {
+  //       sender.replaceTrack(newStream.getVideoTracks()[0]);
+  //     }
+  //   }
+  // };
 
   const acceptCall = () => {
     getUserMediaStream().then((localStream) => {
@@ -214,11 +214,40 @@ const WebRTCConnection = () => {
   //   }
   // };
 
+  // const toggleCamera = () => {
+  //   setUseBackCamera((prev) => !prev);  // Toggle the camera mode
+
+  //   // If there's an ongoing call, switch the camera stream without ending the call
+  //   switchCamera();
+  // };
+
+  const switchCamera = async () => {
+    if (stream) {
+      // Stop the current video tracks only to preserve other tracks (e.g., audio)
+      stream.getVideoTracks().forEach((track) => track.stop());
+    }
+
+    // Get the new stream with the switched camera (either front or back)
+    const newStream = await getUserMediaStream();
+    setStream(newStream); // Set new stream to state
+    videoRef.current.srcObject = newStream; // Update the local video element
+
+    if (currentCall) {
+      // If there is an ongoing call, replace the video track on the call
+      const videoTrack = newStream.getVideoTracks()[0];
+      const sender = currentCall.peerConnection
+        .getSenders()
+        .find((sender) => sender.track.kind === "video");
+      if (sender) {
+        // Replace the existing video track with the new one
+        await sender.replaceTrack(videoTrack);
+      }
+    }
+  };
+
   const toggleCamera = () => {
-    setUseBackCamera((prev) => !prev);  // Toggle the camera mode
-  
-    // If there's an ongoing call, switch the camera stream without ending the call
-    switchCamera();
+    setUseBackCamera((prev) => !prev); // Toggle between front and back camera
+    switchCamera(); // Switch camera without ending the call
   };
 
   return (
