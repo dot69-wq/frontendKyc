@@ -71,6 +71,8 @@ const WebRTCConnection = () => {
           console.log("Call ended");
           cleanupStreams();
         });
+
+        console.log("Call received, currentCall set:", call);
       });
     });
 
@@ -78,7 +80,6 @@ const WebRTCConnection = () => {
       peer.destroy();
       socket.current.disconnect();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -105,24 +106,40 @@ const WebRTCConnection = () => {
     if (currentDeviceId) {
       switchCamera(currentDeviceId);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDeviceId]);
 
   const switchCamera = async (deviceId) => {
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop()); // Stop the current stream
-    }
-    const newStream = await getUserMediaStream(deviceId);
-    setStream(newStream);
-    videoRef.current.srcObject = newStream; // Update video source
-
-    // If there's an ongoing call, replace the video track
-    if (currentCall) {
-      const videoTrack = newStream.getVideoTracks()[0];
-      const sender = currentCall.peerConnection.getSenders().find((s) => s.track.kind === "video");
-      if (sender) {
-        sender.replaceTrack(videoTrack);
+    try {
+      // Stop the current stream tracks
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
       }
+
+      // Get the new stream with the selected camera
+      const newStream = await getUserMediaStream(deviceId);
+      setStream(newStream);
+      videoRef.current.srcObject = newStream; // Update local video source
+
+      // If there's an ongoing call, replace the video track
+      if (currentCall && currentCall.peerConnection) {
+        const videoTrack = newStream.getVideoTracks()[0];
+        const senders = currentCall.peerConnection.getSenders();
+
+        // Find the sender that has a video track
+        const videoSender = senders.find((sender) => sender.track?.kind === "video");
+
+        if (videoSender && videoTrack) {
+          console.log("Replacing video track...");
+          await videoSender.replaceTrack(videoTrack);
+          console.log("Video track replaced successfully.");
+        } else {
+          console.error("No video sender or track found.");
+        }
+      } else {
+        console.error("No active call or peer connection found.");
+      }
+    } catch (error) {
+      console.error("Error switching camera:", error);
     }
   };
 
@@ -145,6 +162,25 @@ const WebRTCConnection = () => {
     if (targetPeerId) {
       console.log("Initiating call to:", targetPeerId);
       socket.current.emit("call-peer", targetPeerId);
+
+      getUserMediaStream(currentDeviceId).then((localStream) => {
+        setStream(localStream);
+        videoRef.current.srcObject = localStream; // Show local video
+
+        const call = peerRef.current.call(targetPeerId, localStream);
+        setCurrentCall(call);
+
+        call.on("stream", (remoteStream) => {
+          remoteVideoRef.current.srcObject = remoteStream; // Show remote video
+        });
+
+        call.on("close", () => {
+          console.log("Call ended");
+          cleanupStreams();
+        });
+
+        console.log("Call initiated, currentCall set:", call);
+      });
     } else {
       console.log("No other peers available");
     }
@@ -166,6 +202,8 @@ const WebRTCConnection = () => {
         console.log("Call ended");
         cleanupStreams();
       });
+
+      console.log("Call accepted, currentCall set:", call);
     });
     setIsReceivingCall(false);
   };
