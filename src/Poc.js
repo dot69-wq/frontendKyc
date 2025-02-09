@@ -22,7 +22,6 @@ const WebRTCConnection = () => {
     socket.current = io("https://backendkyc.onrender.com");
 
     // Initialize PeerJS
-    //const peer = new Peer();
     const peer = new Peer({
       config: {
         iceServers: [
@@ -116,6 +115,15 @@ const WebRTCConnection = () => {
     const newStream = await getUserMediaStream(deviceId);
     setStream(newStream);
     videoRef.current.srcObject = newStream; // Update video source
+
+    // If there's an ongoing call, replace the video track
+    if (currentCall) {
+      const videoTrack = newStream.getVideoTracks()[0];
+      const sender = currentCall.peerConnection.getSenders().find((s) => s.track.kind === "video");
+      if (sender) {
+        sender.replaceTrack(videoTrack);
+      }
+    }
   };
 
   const getUserMediaStream = async (deviceId) => {

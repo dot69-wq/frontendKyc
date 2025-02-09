@@ -119,16 +119,6 @@ const WebRTCConnection = () => {
     }
   };
 
-  // const switchCamera = async () => {
-  //   if (stream) {
-  //     stream.getTracks().forEach((track) => track.stop());
-  //   }
-
-  //   const newStream = await getUserMediaStream();
-  //   setStream(newStream);
-  //   videoRef.current.srcObject = newStream; // Update video source
-  // };
-
   const initiateCall = () => {
     const targetPeerId = availablePeers.find((id) => id !== peerId);
     if (targetPeerId) {
@@ -138,25 +128,6 @@ const WebRTCConnection = () => {
       console.log("No other peers available");
     }
   };
-
-  // const switchCamera = async () => {
-  //   if (stream) {
-  //     // Stop current video tracks only
-  //     stream.getVideoTracks().forEach((track) => track.stop());
-  //   }
-
-  //   const newStream = await getUserMediaStream();  // Get new stream with the switched camera
-  //   setStream(newStream);
-  //   videoRef.current.srcObject = newStream;  // Update the local video stream
-
-  //   // If there's an ongoing call, replace the old stream with the new one
-  //   if (currentCall) {
-  //     const sender = currentCall.peerConnection.getSenders().find((sender) => sender.track.kind === "video");
-  //     if (sender) {
-  //       sender.replaceTrack(newStream.getVideoTracks()[0]);
-  //     }
-  //   }
-  // };
 
   const acceptCall = () => {
     getUserMediaStream().then((localStream) => {
@@ -202,24 +173,6 @@ const WebRTCConnection = () => {
     setCurrentCall(null);
     setCallerId(null);
   };
-
-  // const toggleCamera = () => {
-  //   setUseBackCamera((prev) => !prev); // Toggle the camera mode
-  //   if (stream) {
-  //     cleanupStreams();
-  //     getUserMediaStream().then((newStream) => {
-  //       setStream(newStream);
-  //       videoRef.current.srcObject = newStream;
-  //     });
-  //   }
-  // };
-
-  // const toggleCamera = () => {
-  //   setUseBackCamera((prev) => !prev);  // Toggle the camera mode
-
-  //   // If there's an ongoing call, switch the camera stream without ending the call
-  //   switchCamera();
-  // };
 
   const switchCamera = async () => {
     if (stream) {
