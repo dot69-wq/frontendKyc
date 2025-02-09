@@ -74,6 +74,7 @@ const WebRTCConnection = () => {
       peer.destroy();
       socket.current.disconnect();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useBackCamera]); // Add useBackCamera to dependency to re-trigger when the camera is toggled
 
   useEffect(() => {
@@ -99,6 +100,7 @@ const WebRTCConnection = () => {
     if (currentDeviceId) {
       switchCamera();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDeviceId]);
 
   const getUserMediaStream = async () => {
@@ -205,7 +207,9 @@ const WebRTCConnection = () => {
         console.log("Senders:", senders);
 
         // Find the sender that has a video track
-        const videoSender = senders.find((sender) => sender.track?.kind === "video");
+        const videoSender = senders.find(
+          (sender) => sender.track?.kind === "video"
+        );
 
         if (videoSender) {
           console.log("Replacing video track...");
