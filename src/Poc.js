@@ -9,8 +9,8 @@ const WebRTCConnection = () => {
   const [callerId, setCallerId] = useState(null);
   const [peerId, setPeerId] = useState(null);
   const [availablePeers, setAvailablePeers] = useState([]);
-  const [videoDevices, setVideoDevices] = useState([]);
   const [currentDeviceId, setCurrentDeviceId] = useState(null);
+  const [useBackCamera, setUseBackCamera] = useState(false); // Track the camera mode
 
   const socket = useRef();
   const peerRef = useRef();
@@ -38,49 +38,59 @@ const WebRTCConnection = () => {
     peer.on("open", (id) => {
       setPeerId(id);
       console.log("Generated Peer ID:", id);
-      // Register peer with signaling server
       socket.current.emit("register-peer", id);
     });
 
-    // Handle updated peers list
     socket.current.on("peers-list", (peers) => {
       console.log("Updated peers list:", peers);
       setAvailablePeers(peers);
     });
 
-    // Handle incoming call notification
     socket.current.on("incoming-call", (callerPeerId) => {
       console.log("Incoming call from:", callerPeerId);
       setIsReceivingCall(true);
       setCallerId(callerPeerId);
     });
 
-    // Handle WebRTC call setup
     peer.on("call", (call) => {
-      getUserMediaStream(currentDeviceId).then((localStream) => {
-        setStream(localStream);
-        videoRef.current.srcObject = localStream; // Show local video
-        call.answer(localStream); // Answer the call
-        setCurrentCall(call);
+      getUserMediaStream()
+        .then((localStream) => {
+          if (!localStream) {
+            console.error("Failed to get local stream");
+            return;
+          }
 
-        call.on("stream", (remoteStream) => {
-          remoteVideoRef.current.srcObject = remoteStream; // Show remote video
+          setStream(localStream);
+          videoRef.current.srcObject = localStream;
+          call.answer(localStream);
+          setCurrentCall(call);
+
+          call.on("stream", (remoteStream) => {
+            console.log("Remote stream received");
+            remoteVideoRef.current.srcObject = remoteStream;
+          });
+
+          call.on("close", () => {
+            console.log("Call ended");
+            cleanupStreams();
+          });
+
+          call.on("error", (err) => {
+            console.error("Call error:", err);
+          });
+
+          console.log("Call received, currentCall set:", call);
+        })
+        .catch((err) => {
+          console.error("Error getting local stream:", err);
         });
-
-        call.on("close", () => {
-          console.log("Call ended");
-          cleanupStreams();
-        });
-
-        console.log("Call received, currentCall set:", call);
-      });
     });
 
     return () => {
       peer.destroy();
       socket.current.disconnect();
     };
-  }, []);
+  }, [useBackCamera]); // Add useBackCamera to dependency to re-trigger when the camera is toggled
 
   useEffect(() => {
     // Enumerate devices and set initial video device
@@ -88,7 +98,6 @@ const WebRTCConnection = () => {
       const videoInputDevices = devices.filter(
         (device) => device.kind === "videoinput"
       );
-      setVideoDevices(videoInputDevices);
 
       const backCamera = videoInputDevices.find(
         (device) =>
@@ -104,74 +113,84 @@ const WebRTCConnection = () => {
 
   useEffect(() => {
     if (currentDeviceId) {
-      switchCamera(currentDeviceId);
+      switchCamera();
     }
   }, [currentDeviceId]);
 
-  const switchCamera = async (deviceId) => {
-    try {
-      // Stop the current stream tracks
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
-
-      // Get the new stream with the selected camera
-      const newStream = await getUserMediaStream(deviceId);
-      setStream(newStream);
-      videoRef.current.srcObject = newStream; // Update local video source
-
-      // If there's an ongoing call, replace the video track
-      if (currentCall && currentCall.peerConnection) {
-        const videoTrack = newStream.getVideoTracks()[0];
-        const senders = currentCall.peerConnection.getSenders();
-
-        // Find the sender that has a video track
-        const videoSender = senders.find((sender) => sender.track?.kind === "video");
-
-        if (videoSender && videoTrack) {
-          console.log("Replacing video track...");
-          await videoSender.replaceTrack(videoTrack);
-          console.log("Video track replaced successfully.");
-        } else {
-          console.error("No video sender or track found.");
-        }
-      } else {
-        console.error("No active call or peer connection found.");
-      }
-    } catch (error) {
-      console.error("Error switching camera:", error);
-    }
-  };
-
-  const getUserMediaStream = async (deviceId) => {
+  const getUserMediaStream = async () => {
     const constraints = {
-      video: { deviceId: deviceId ? { exact: deviceId } : undefined },
+      video: { facingMode: useBackCamera ? { exact: "environment" } : "user" },
       audio: true,
     };
 
     try {
       return await navigator.mediaDevices.getUserMedia(constraints);
     } catch (err) {
-      console.error("Error accessing camera: ", err);
-      return null; // Handle error
+      console.error("Error accessing camera:", err);
+      return null;
     }
   };
 
   const initiateCall = () => {
-    const targetPeerId = availablePeers.find((id) => id !== peerId); // Find another peer
+    const targetPeerId = availablePeers.find((id) => id !== peerId);
     if (targetPeerId) {
       console.log("Initiating call to:", targetPeerId);
       socket.current.emit("call-peer", targetPeerId);
 
-      getUserMediaStream(currentDeviceId).then((localStream) => {
-        setStream(localStream);
-        videoRef.current.srcObject = localStream; // Show local video
+      getUserMediaStream()
+        .then((localStream) => {
+          if (!localStream) {
+            console.error("Failed to get local stream");
+            return;
+          }
 
-        const call = peerRef.current.call(targetPeerId, localStream);
+          setStream(localStream);
+          videoRef.current.srcObject = localStream;
+
+          const call = peerRef.current.call(targetPeerId, localStream);
+          setCurrentCall(call);
+
+          call.on("stream", (remoteStream) => {
+            console.log("Remote stream received");
+            remoteVideoRef.current.srcObject = remoteStream;
+          });
+
+          call.on("close", () => {
+            console.log("Call ended");
+            cleanupStreams();
+          });
+
+          call.on("error", (err) => {
+            console.error("Call error:", err);
+          });
+
+          console.log("Call initiated, currentCall set:", call);
+        })
+        .catch((err) => {
+          console.error("Error getting local stream:", err);
+        });
+    } else {
+      console.log("No other peers available");
+    }
+  };
+
+  const acceptCall = () => {
+    getUserMediaStream()
+      .then((localStream) => {
+        if (!localStream) {
+          console.error("Failed to get local stream");
+          return;
+        }
+
+        setStream(localStream);
+        videoRef.current.srcObject = localStream;
+
+        const call = peerRef.current.call(callerId, localStream);
         setCurrentCall(call);
 
         call.on("stream", (remoteStream) => {
-          remoteVideoRef.current.srcObject = remoteStream; // Show remote video
+          console.log("Remote stream received");
+          remoteVideoRef.current.srcObject = remoteStream;
         });
 
         call.on("close", () => {
@@ -179,38 +198,22 @@ const WebRTCConnection = () => {
           cleanupStreams();
         });
 
-        console.log("Call initiated, currentCall set:", call);
-      });
-    } else {
-      console.log("No other peers available");
-    }
-  };
+        call.on("error", (err) => {
+          console.error("Call error:", err);
+        });
 
-  const acceptCall = () => {
-    getUserMediaStream(currentDeviceId).then((localStream) => {
-      setStream(localStream);
-      videoRef.current.srcObject = localStream; // Show local video
-
-      const call = peerRef.current.call(callerId, localStream);
-      setCurrentCall(call);
-
-      call.on("stream", (remoteStream) => {
-        remoteVideoRef.current.srcObject = remoteStream; // Show remote video
+        console.log("Call accepted, currentCall set:", call);
+      })
+      .catch((err) => {
+        console.error("Error getting local stream:", err);
       });
 
-      call.on("close", () => {
-        console.log("Call ended");
-        cleanupStreams();
-      });
-
-      console.log("Call accepted, currentCall set:", call);
-    });
     setIsReceivingCall(false);
   };
 
   const endCall = () => {
     if (currentCall) {
-      currentCall.close(); // End the call
+      currentCall.close();
     }
     cleanupStreams();
   };
@@ -233,6 +236,65 @@ const WebRTCConnection = () => {
     setCallerId(null);
   };
 
+  const switchCamera = async () => {
+    try {
+      console.log("Switching camera...");
+  
+      // Toggle the camera mode
+      setUseBackCamera((prev) => !prev);
+  
+      // Get the new stream with the selected camera
+      const newStream = await getUserMediaStream();
+      if (!newStream) {
+        console.error("Failed to get new video stream.");
+        return;
+      }
+  
+      // Update the local video element
+      videoRef.current.srcObject = newStream;
+  
+      // Ensure we are in a call before replacing the track
+      if (currentCall && currentCall.peerConnection) {
+        console.log("Current call and peer connection found.");
+  
+        const videoTrack = newStream.getVideoTracks()[0];
+        const senders = currentCall.peerConnection.getSenders();
+  
+        // Find the sender that has a video track
+        const videoSender = senders.find(sender => sender.track?.kind === "video");
+  
+        if (videoSender && videoTrack) {
+          console.log("Replacing video track...");
+          await videoSender.replaceTrack(videoTrack);
+          console.log("Video track replaced successfully.");
+        } else {
+          console.warn("No video sender found. Attempting to renegotiate...");
+  
+          // Try renegotiating the call (fallback)
+          currentCall.peerConnection.removeTrack(videoSender);
+          currentCall.peerConnection.addTrack(videoTrack, newStream);
+        }
+      } else {
+        console.warn("No active call, only updating local video stream.");
+      }
+  
+      // Stop the previous stream after replacing the track
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+  
+      setStream(newStream); // Update state with the new stream
+    } catch (error) {
+      console.error("Error switching camera:", error);
+    }
+  };
+  
+
+  const toggleCamera = () => {
+    setUseBackCamera((prev) => !prev); // Toggle camera mode
+    switchCamera(); // Call the camera switching logic
+  };
+
   return (
     <div>
       <h1>WebRTC Video Call with Camera Toggle</h1>
@@ -250,6 +312,10 @@ const WebRTCConnection = () => {
 
       <button onClick={endCall} disabled={!currentCall}>
         End Call
+      </button>
+
+      <button onClick={toggleCamera}>
+        Switch to {useBackCamera ? "Front" : "Back"} Camera
       </button>
 
       <div>
@@ -270,25 +336,6 @@ const WebRTCConnection = () => {
           playsInline
           style={{ width: "80%", border: "1px solid black" }}
         />
-      </div>
-
-      <div style={{ marginTop: "20px" }}>
-        <h2>Toggle Camera</h2>
-        {videoDevices.map((device) => (
-          <button
-            key={device.deviceId}
-            onClick={() => setCurrentDeviceId(device.deviceId)}
-            style={{
-              margin: "5px",
-              padding: "10px",
-              background:
-                currentDeviceId === device.deviceId ? "green" : "gray",
-              color: "white",
-            }}
-          >
-            {device.label || `Camera ${device.deviceId}`}
-          </button>
-        ))}
       </div>
     </div>
   );
