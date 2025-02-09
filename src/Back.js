@@ -9,7 +9,6 @@ const WebRTCConnection = () => {
   const [callerId, setCallerId] = useState(null);
   const [peerId, setPeerId] = useState(null);
   const [availablePeers, setAvailablePeers] = useState([]);
-  //const [videoDevices, setVideoDevices] = useState([]);
   const [currentDeviceId, setCurrentDeviceId] = useState(null);
   const [useBackCamera, setUseBackCamera] = useState(false); // Track the camera mode
 
@@ -75,7 +74,6 @@ const WebRTCConnection = () => {
       peer.destroy();
       socket.current.disconnect();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useBackCamera]); // Add useBackCamera to dependency to re-trigger when the camera is toggled
 
   useEffect(() => {
@@ -84,7 +82,6 @@ const WebRTCConnection = () => {
       const videoInputDevices = devices.filter(
         (device) => device.kind === "videoinput"
       );
-      // setVideoDevices(videoInputDevices);
 
       const backCamera = videoInputDevices.find(
         (device) =>
@@ -100,9 +97,8 @@ const WebRTCConnection = () => {
 
   useEffect(() => {
     if (currentDeviceId) {
-      switchCamera(currentDeviceId);
+      switchCamera();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDeviceId]);
 
   const getUserMediaStream = async () => {
@@ -175,36 +171,57 @@ const WebRTCConnection = () => {
   };
 
   const switchCamera = async () => {
-    if (stream) {
-      // Stop all video tracks first, but leave audio intact
-      stream.getVideoTracks().forEach((track) => track.stop());
-    }
+    try {
+      console.log("Switching camera...");
 
-    // Get the new stream from the desired camera
-    const newStream = await getUserMediaStream();
-    setStream(newStream); // Set the new stream to state
-    videoRef.current.srcObject = newStream; // Update the local video element
-
-    if (currentCall) {
-      // Ensure the call is ongoing and we replace the video track
-      const videoTrack = newStream.getVideoTracks()[0];
-      const sender = currentCall.peerConnection
-        ?.getSenders()
-        ?.find((sender) => sender.track.kind === "video");
-
-      if (sender) {
-        // Try replacing the video track in the ongoing peer connection
-        try {
-          await sender.replaceTrack(videoTrack);
-          console.log("Replaced video track successfully");
-        } catch (err) {
-          console.error("Error replacing video track:", err);
-        }
+      // Stop the current video tracks
+      if (stream) {
+        console.log("Stopping current video tracks...");
+        stream.getVideoTracks().forEach((track) => track.stop());
       }
+
+      // Get the new stream with the selected camera
+      console.log("Getting new stream...");
+      const newStream = await getUserMediaStream();
+      if (!newStream) {
+        console.error("Failed to get new stream");
+        return;
+      }
+
+      setStream(newStream); // Set the new stream to state
+      videoRef.current.srcObject = newStream; // Update the local video element
+
+      // If there's an ongoing call, replace the video track
+      if (currentCall && currentCall.peerConnection) {
+        console.log("Current call and peer connection found.");
+
+        const videoTrack = newStream.getVideoTracks()[0];
+        if (!videoTrack) {
+          console.error("No video track found in the new stream");
+          return;
+        }
+
+        const senders = currentCall.peerConnection.getSenders();
+        console.log("Senders:", senders);
+
+        // Find the sender that has a video track
+        const videoSender = senders.find((sender) => sender.track?.kind === "video");
+
+        if (videoSender) {
+          console.log("Replacing video track...");
+          await videoSender.replaceTrack(videoTrack);
+          console.log("Video track replaced successfully.");
+        } else {
+          console.error("No video sender found.");
+        }
+      } else {
+        console.error("No active call or peer connection found.");
+      }
+    } catch (error) {
+      console.error("Error switching camera:", error);
     }
   };
 
-  // This function handles toggling between the front and back camera
   const toggleCamera = () => {
     setUseBackCamera((prev) => !prev); // Toggle camera mode
     switchCamera(); // Call the camera switching logic
