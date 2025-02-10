@@ -67,6 +67,21 @@ const WebRTCConnection = () => {
           console.log("Call ended");
           cleanupStreams();
         });
+
+        // Debugging: Log ICE connection state
+        call.peerConnection.oniceconnectionstatechange = () => {
+          console.log("ICE Connection State:", call.peerConnection.iceConnectionState);
+        };
+
+        // Debugging: Log signaling state
+        call.peerConnection.onsignalingstatechange = () => {
+          console.log("Signaling State:", call.peerConnection.signalingState);
+        };
+
+        // Debugging: Log track events
+        call.peerConnection.ontrack = (event) => {
+          console.log("Received remote track:", event.track);
+        };
       });
     });
 
@@ -143,6 +158,21 @@ const WebRTCConnection = () => {
         console.log("Call ended");
         cleanupStreams();
       });
+
+      // Debugging: Log ICE connection state
+      call.peerConnection.oniceconnectionstatechange = () => {
+        console.log("ICE Connection State:", call.peerConnection.iceConnectionState);
+      };
+
+      // Debugging: Log signaling state
+      call.peerConnection.onsignalingstatechange = () => {
+        console.log("Signaling State:", call.peerConnection.signalingState);
+      };
+
+      // Debugging: Log track events
+      call.peerConnection.ontrack = (event) => {
+        console.log("Received remote track:", event.track);
+      };
     });
     setIsReceivingCall(false);
   };
@@ -176,10 +206,10 @@ const WebRTCConnection = () => {
     try {
       console.log("Switching camera...");
 
-      // Stop the current video tracks
-      if (stream) {
-        console.log("Stopping current video tracks...");
-        stream.getVideoTracks().forEach((track) => track.stop());
+      // Check if there's an active call and peer connection
+      if (!currentCall || !currentCall.peerConnection) {
+        console.error("No active call or peer connection found.");
+        return;
       }
 
       // Get the new stream with the selected camera
@@ -190,39 +220,43 @@ const WebRTCConnection = () => {
         return;
       }
 
-      setStream(newStream); // Set the new stream to state
-      videoRef.current.srcObject = newStream; // Update the local video element
-
-      // If there's an ongoing call, replace the video track
-      if (currentCall && currentCall.peerConnection) {
-        console.log("Current call and peer connection found.");
-
-        const videoTrack = newStream.getVideoTracks()[0];
-        if (!videoTrack) {
-          console.error("No video track found in the new stream");
-          return;
-        }
-
-        const senders = currentCall.peerConnection.getSenders();
-        console.log("Senders:", senders);
-
-        // Find the sender that has a video track
-        const videoSender = senders.find(
-          (sender) => sender.track?.kind === "video"
-        );
-
-        if (videoSender) {
-          console.log("Replacing video track...");
-          await videoSender.replaceTrack(videoTrack);
-          console.log("Video track replaced successfully.");
-        } else {
-          console.error("No video sender found.");
-        }
-      } else {
-        console.error("No active call or peer connection found.");
+      const newVideoTrack = newStream.getVideoTracks()[0];
+      if (!newVideoTrack) {
+        console.error("No video track found in the new stream");
+        return;
       }
+
+      // Replace the video track in the existing peer connection
+      const senders = currentCall.peerConnection.getSenders();
+      console.log("Senders:", senders);
+
+      const videoSender = senders.find((sender) => sender.track?.kind === "video");
+      if (videoSender) {
+        console.log("Replacing video track...");
+        await videoSender.replaceTrack(newVideoTrack);
+        console.log("Video track replaced successfully.");
+      } else {
+        console.error("No video sender found.");
+        return;
+      }
+
+      // Stop the old video tracks after the new track is successfully replaced
+      if (stream) {
+        stream.getVideoTracks().forEach((track) => track.stop());
+      }
+
+      // Update the local video element and state
+      setStream(newStream);
+      videoRef.current.srcObject = newStream;
     } catch (error) {
       console.error("Error switching camera:", error);
+
+      // Handle OverconstrainedError
+      if (error.name === "OverconstrainedError") {
+        console.error("Requested camera constraints cannot be satisfied. Falling back to default camera.");
+        setUseBackCamera(false); // Fallback to the front camera
+        await switchCamera(); // Retry with the front camera
+      }
     }
   };
 
