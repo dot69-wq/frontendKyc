@@ -9,7 +9,6 @@ const WebRTCConnection = () => {
   const [callerId, setCallerId] = useState(null);
   const [peerId, setPeerId] = useState(null);
   const [availablePeers, setAvailablePeers] = useState([]);
-  const [currentDeviceId, setCurrentDeviceId] = useState(null);
   const [useBackCamera, setUseBackCamera] = useState(false); // Track the camera mode
 
   const socket = useRef();
@@ -19,20 +18,10 @@ const WebRTCConnection = () => {
 
   useEffect(() => {
     // Initialize WebSocket connection
-    socket.current = io("https://backendkyc.onrender.com");
+    socket.current = io("http://localhost:3001");
 
     // Initialize PeerJS
-    const peer = new Peer({
-      config: {
-        iceServers: [
-          {
-            url: "stun:stun.manchtech.com:5349",
-            username: "vkyc",
-            credential: "esign@vkyc",
-          },
-        ],
-      },
-    });
+    const peer = new Peer();
     peerRef.current = peer;
 
     peer.on("open", (id) => {
@@ -67,21 +56,6 @@ const WebRTCConnection = () => {
           console.log("Call ended");
           cleanupStreams();
         });
-
-        // Debugging: Log ICE connection state
-        call.peerConnection.oniceconnectionstatechange = () => {
-          console.log("ICE Connection State:", call.peerConnection.iceConnectionState);
-        };
-
-        // Debugging: Log signaling state
-        call.peerConnection.onsignalingstatechange = () => {
-          console.log("Signaling State:", call.peerConnection.signalingState);
-        };
-
-        // Debugging: Log track events
-        call.peerConnection.ontrack = (event) => {
-          console.log("Received remote track:", event.track);
-        };
       });
     });
 
@@ -89,34 +63,7 @@ const WebRTCConnection = () => {
       peer.destroy();
       socket.current.disconnect();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [useBackCamera]); // Add useBackCamera to dependency to re-trigger when the camera is toggled
-
-  useEffect(() => {
-    // Enumerate devices and set initial video device
-    navigator.mediaDevices.enumerateDevices().then((devices) => {
-      const videoInputDevices = devices.filter(
-        (device) => device.kind === "videoinput"
-      );
-
-      const backCamera = videoInputDevices.find(
-        (device) =>
-          device.label.toLowerCase().includes("back") ||
-          device.label.toLowerCase().includes("environment")
-      );
-
-      setCurrentDeviceId(
-        backCamera ? backCamera.deviceId : videoInputDevices[0]?.deviceId
-      );
-    });
   }, []);
-
-  useEffect(() => {
-    if (currentDeviceId) {
-      switchCamera();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentDeviceId]);
 
   const getUserMediaStream = async () => {
     const constraints = {
@@ -158,21 +105,6 @@ const WebRTCConnection = () => {
         console.log("Call ended");
         cleanupStreams();
       });
-
-      // Debugging: Log ICE connection state
-      call.peerConnection.oniceconnectionstatechange = () => {
-        console.log("ICE Connection State:", call.peerConnection.iceConnectionState);
-      };
-
-      // Debugging: Log signaling state
-      call.peerConnection.onsignalingstatechange = () => {
-        console.log("Signaling State:", call.peerConnection.signalingState);
-      };
-
-      // Debugging: Log track events
-      call.peerConnection.ontrack = (event) => {
-        console.log("Received remote track:", event.track);
-      };
     });
     setIsReceivingCall(false);
   };
@@ -206,12 +138,6 @@ const WebRTCConnection = () => {
     try {
       console.log("Switching camera...");
 
-      // Check if there's an active call and peer connection
-      if (!currentCall || !currentCall.peerConnection) {
-        console.error("No active call or peer connection found.");
-        return;
-      }
-
       // Get the new stream with the selected camera
       console.log("Getting new stream...");
       const newStream = await getUserMediaStream();
@@ -226,18 +152,23 @@ const WebRTCConnection = () => {
         return;
       }
 
-      // Replace the video track in the existing peer connection
-      const senders = currentCall.peerConnection.getSenders();
-      console.log("Senders:", senders);
+      // If there's an ongoing call, replace the video track
+      if (currentCall && currentCall.peerConnection) {
+        console.log("Current call and peer connection found.");
 
-      const videoSender = senders.find((sender) => sender.track?.kind === "video");
-      if (videoSender) {
-        console.log("Replacing video track...");
-        await videoSender.replaceTrack(newVideoTrack);
-        console.log("Video track replaced successfully.");
+        const senders = currentCall.peerConnection.getSenders();
+        console.log("Senders:", senders);
+
+        const videoSender = senders.find((sender) => sender.track?.kind === "video");
+        if (videoSender) {
+          console.log("Replacing video track...");
+          await videoSender.replaceTrack(newVideoTrack);
+          console.log("Video track replaced successfully.");
+        } else {
+          console.error("No video sender found.");
+        }
       } else {
-        console.error("No video sender found.");
-        return;
+        console.error("No active call or peer connection found.");
       }
 
       // Stop the old video tracks after the new track is successfully replaced
@@ -245,18 +176,10 @@ const WebRTCConnection = () => {
         stream.getVideoTracks().forEach((track) => track.stop());
       }
 
-      // Update the local video element and state
-      setStream(newStream);
-      videoRef.current.srcObject = newStream;
+      setStream(newStream); // Set the new stream to state
+      videoRef.current.srcObject = newStream; // Update the local video element
     } catch (error) {
       console.error("Error switching camera:", error);
-
-      // Handle OverconstrainedError
-      if (error.name === "OverconstrainedError") {
-        console.error("Requested camera constraints cannot be satisfied. Falling back to default camera.");
-        setUseBackCamera(false); // Fallback to the front camera
-        await switchCamera(); // Retry with the front camera
-      }
     }
   };
 
