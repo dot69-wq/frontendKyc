@@ -17,11 +17,22 @@ const WebRTCConnection = () => {
   const remoteVideoRef = useRef();
 
   useEffect(() => {
+
     // Initialize WebSocket connection
-    socket.current = io("http://localhost:3001");
+    socket.current = io("https://backendkyc.onrender.com");
 
     // Initialize PeerJS
-    const peer = new Peer();
+    const peer = new Peer({
+      config: {
+        iceServers: [
+          {
+            url: "stun:stun.manchtech.com:5349",
+            username: "vkyc",
+            credential: "esign@vkyc",
+          },
+        ],
+      },
+    });
     peerRef.current = peer;
 
     peer.on("open", (id) => {
@@ -63,6 +74,7 @@ const WebRTCConnection = () => {
       peer.destroy();
       socket.current.disconnect();
     };
+    // eslint-disable-next-line
   }, []);
 
   const getUserMediaStream = async () => {
@@ -159,7 +171,9 @@ const WebRTCConnection = () => {
         const senders = currentCall.peerConnection.getSenders();
         console.log("Senders:", senders);
 
-        const videoSender = senders.find((sender) => sender.track?.kind === "video");
+        const videoSender = senders.find(
+          (sender) => sender.track?.kind === "video"
+        );
         if (videoSender) {
           console.log("Replacing video track...");
           await videoSender.replaceTrack(newVideoTrack);
