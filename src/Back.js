@@ -202,6 +202,7 @@ const WebRTCConnection = () => {
 
   useEffect(() => {
     switchCamera();
+    // eslint-disable-next-line
   }, [useBackCamera]);
 
   return (
