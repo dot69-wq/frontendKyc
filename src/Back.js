@@ -17,7 +17,7 @@ const WebRTCConnection = () => {
   const remoteVideoRef = useRef();
 
   useEffect(() => {
-
+    
     // Initialize WebSocket connection
     socket.current = io("https://backendkyc.onrender.com");
 
@@ -171,9 +171,7 @@ const WebRTCConnection = () => {
         const senders = currentCall.peerConnection.getSenders();
         console.log("Senders:", senders);
 
-        const videoSender = senders.find(
-          (sender) => sender.track?.kind === "video"
-        );
+        const videoSender = senders.find((sender) => sender.track?.kind === "video");
         if (videoSender) {
           console.log("Replacing video track...");
           await videoSender.replaceTrack(newVideoTrack);
@@ -198,7 +196,7 @@ const WebRTCConnection = () => {
   };
 
   const toggleCamera = () => {
-    setUseBackCamera((prev) => !prev); // Toggle camera mode
+    setUseBackCamera((prev) => !prev); // Toggle camera mode first
     switchCamera(); // Call the camera switching logic
   };
 
